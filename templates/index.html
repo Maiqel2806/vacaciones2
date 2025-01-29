@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud de Vacaciones</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .error {
+            color: red;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h2 class="text-center mb-4">Solicitud de Vacaciones</h2>
+            <form id="vacationForm" action="/generar_pdf" method="post">
+
+                <!-- Selección de Empresa -->
+                <div class="mb-3">
+                    <label for="empresa" class="form-label">Seleccionar Empresa:</label>
+                    <select id="empresa" name="empresa" class="form-select" required>
+                        <option value="" disabled selected>Seleccione una empresa</option>
+                        <option value="Clean Hub">Clean Hub</option>
+                        <option value="Zurcidos">Zurcidos</option>
+                    </select>
+                    <div class="error" id="empresaError"></div>
+                </div>
+                
+                <!-- Selección de Empleado -->
+                <div class="mb-3">
+                    <label for="empleado" class="form-label">Seleccionar Empleado:</label>
+                    <select id="empleado" name="empleado" class="form-select" required>
+                        <option value="" disabled selected>Seleccione un empleado</option>
+                        {% for empleado in empleados %}
+                            <option value="{{ empleado.nombre }}" data-cedula="{{ empleado.cedula }}" data-cargo="{{ empleado.cargo }}">
+                                {{ empleado.nombre }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Cédula -->
+                <div class="mb-3">
+                    <label for="cedula" class="form-label">Número de cédula:</label>
+                    <input type="text" id="cedula" name="cedula" class="form-control" placeholder="Ej. 1234567890" required maxlength="10" readonly>
+                    <div class="error" id="cedulaError"></div>
+                </div>
+                
+                <!-- Cargo -->
+                <div class="mb-3">
+                    <label for="cargo" class="form-label">Cargo:</label>
+                    <input type="text" id="cargo" name="cargo" class="form-control" placeholder="Ej. Analista de Sistemas" required readonly>
+                    <div class="error" id="cargoError"></div>
+                </div>
+
+                <!-- Días Tomados -->
+                <div class="mb-3">
+                    <label for="dias" class="form-label">Días tomados:</label>
+                    <input type="number" id="dias" name="dias" class="form-control" min="1" max="30" required>
+                    <div class="error" id="diasError"></div>
+                </div>
+
+                <!-- Tipo de Solicitud -->
+                <div class="mb-3">
+                    <label for="tipo_solicitud" class="form-label">Tipo de solicitud:</label>
+                    <select id="tipo_solicitud" name="tipo_solicitud" class="form-select" required>
+                        <option value="" disabled selected>Seleccione tipo</option>
+                        <option value="vacaciones">Vacaciones</option>
+                        <option value="anticipo">Anticipo de Vacaciones</option>
+                    </select>
+                    <div class="error" id="tipoError"></div>
+                </div>
+
+                <!-- Fecha de Inicio -->
+                <div class="mb-3">
+                    <label for="fecha_inicio" class="form-label">Fecha de inicio:</label>
+                    <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control" required>
+                </div>
+
+                <!-- Fecha de Fin -->
+                <div class="mb-3">
+                    <label for="fecha_fin" class="form-label">Fecha de fin:</label>
+                    <input type="date" id="fecha_fin" name="fecha_fin" class="form-control" required readonly>
+                    <div class="error" id="fechaError"></div>
+                </div>
+
+                <div class="text-center">
+                    <button type="submit" id="submitBtn" class="btn btn-primary" disabled>Crear Solicitud</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const empleado = document.getElementById("empleado");
+        const empresa = document.getElementById("empresa");
+        const cedula = document.getElementById("cedula");
+        const cargo = document.getElementById("cargo");
+        const dias = document.getElementById("dias");
+        const tipoSolicitud = document.getElementById("tipo_solicitud");
+        const fechaInicio = document.getElementById("fecha_inicio");
+        const fechaFin = document.getElementById("fecha_fin");
+        const submitBtn = document.getElementById("submitBtn");
+
+        // Autocompletar los campos de cédula y cargo cuando se seleccione un empleado
+        empleado.addEventListener("change", function() {
+            const selectedOption = empleado.options[empleado.selectedIndex];
+            cedula.value = selectedOption.getAttribute("data-cedula");  // Autocompleta la cédula
+            cargo.value = selectedOption.getAttribute("data-cargo");  // Autocompleta el cargo
+            validarFormulario();  // Revalidar el formulario después de autocompletar
+        });
+
+        // Validar el formulario
+        function validarFormulario() {
+            let valido = true;
+
+            // Validar Empresa (Debe ser seleccionada)
+            if (empresa.value === "") {
+                document.getElementById("empresaError").textContent = "Debe seleccionar una empresa.";
+                valido = false;
+            } else {
+                document.getElementById("empresaError").textContent = "";
+            }
+
+            // Validar Cédula (10 números exactos)
+            if (!/^\d{10}$/.test(cedula.value)) {
+                document.getElementById("cedulaError").textContent = "Debe contener exactamente 10 dígitos.";
+                valido = false;
+            } else {
+                document.getElementById("cedulaError").textContent = "";
+            }
+
+            // Validar Cargo (Solo letras y espacios)
+            if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñ ]+$/.test(cargo.value)) {
+                document.getElementById("cargoError").textContent = "Solo se permiten letras y espacios.";
+                valido = false;
+            } else {
+                document.getElementById("cargoError").textContent = "";
+            }
+
+            // Validar Días Tomados (Máximo 30)
+            if (dias.value < 1 || dias.value > 30) {
+                document.getElementById("diasError").textContent = "Debe ser un número entre 1 y 30.";
+                valido = false;
+            } else {
+                document.getElementById("diasError").textContent = "";
+            }
+
+            // Validar Tipo de Solicitud (Debe ser seleccionado)
+            if (tipoSolicitud.value === "") {
+                document.getElementById("tipoError").textContent = "Debe seleccionar un tipo de solicitud.";
+                valido = false;
+            } else {
+                document.getElementById("tipoError").textContent = "";
+            }
+
+            // Validar Fechas
+            let inicio = new Date(fechaInicio.value);
+            let fin = new Date(fechaFin.value);
+
+            if (fechaInicio.value && fechaFin.value) {
+                let diasCalculados = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+
+                if (fin < inicio) {
+                    document.getElementById("fechaError").textContent = "La fecha de fin no puede ser menor a la de inicio.";
+                    valido = false;
+                } else if (diasCalculados !== parseInt(dias.value)) {
+                    document.getElementById("fechaError").textContent = `La fecha de fin debe ser ${dias.value} días después de la fecha de inicio.`;
+                    valido = false;
+                } else {
+                    document.getElementById("fechaError").textContent = "";
+                }
+            }
+
+            // Habilitar o deshabilitar el botón de envío
+            submitBtn.disabled = !valido;
+        }
+
+        // Función para calcular la fecha de fin en función de los días tomados
+        function calcularFechaFin() {
+            let inicio = new Date(fechaInicio.value);
+            let diasTomados = parseInt(dias.value);
+
+            if (!isNaN(diasTomados) && fechaInicio.value) {
+                let fin = new Date(inicio);
+                fin.setDate(inicio.getDate() + diasTomados - 1); // Se resta 1 ya que el primer día ya cuenta
+
+                // Establecer la fecha de fin en el campo
+                fechaFin.value = fin.toISOString().split("T")[0];
+            }
+        }
+
+        // Agregar eventos de validación y cálculo de fecha de fin
+        empresa.addEventListener("change", validarFormulario);
+        dias.addEventListener("input", function() {
+            calcularFechaFin();
+            validarFormulario();
+        });
+        tipoSolicitud.addEventListener("change", validarFormulario);
+        fechaInicio.addEventListener("change", function() {
+            calcularFechaFin();
+            validarFormulario();
+        });
+        fechaFin.addEventListener("change", validarFormulario);
+
+        // Confirmación antes de enviar el formulario
+        vacationForm.addEventListener("submit", function(event) {
+            event.preventDefault(); // Prevenir el envío normal
+
+            const tipo = tipoSolicitud.options[tipoSolicitud.selectedIndex].text; // Obtener el texto completo de la opción seleccionada
+            const diasTomados = dias.value;
+
+            // Confirmar con el usuario
+            const confirmacion = window.confirm(`¿Está seguro de crear su solicitud de ${tipo} por ${diasTomados} días?`);
+
+            if (confirmacion) {
+                vacationForm.submit(); // Enviar el formulario si el usuario confirma
+            }
+        });
+    </script>
+</body>
+</html>
