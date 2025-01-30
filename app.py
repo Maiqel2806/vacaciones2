@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.pdfgen import canvas
@@ -10,30 +10,51 @@ app = Flask(__name__)
 
 # Diccionario de empleados con nombre, cédula y cargo
 empleados = {
-    "PUERTA ROJAS MARTA BEATRIZ": {"cedula": "0966605388", "cargo": "AUXILIAR DE LIMPIEZA"},
-    "QUIJANO CUEVA EDUARDO ALEJANDRO": {"cedula": "1724584196", "cargo": "TRABAJADOR EN GENERAL "},
-    "TOALA RODRIGUEZ IRENE LEONOR": {"cedula": "0919539551", "cargo": "AUXLIAR DE ENFERMERIA"}
+    "Clean Hub": [
+        {"nombre": "PUERTA ROJAS MARTA BEATRIZ", "cedula": "0966605388", "cargo": "AUXILIAR DE LIMPIEZA"},
+        {"nombre": "QUIJANO CUEVA EDUARDO ALEJANDRO", "cedula": "1724584196", "cargo": "TRABAJADOR EN GENERAL"},
+        {"nombre": "TOALA RODRIGUEZ IRENE LEONOR", "cedula": "0919539551", "cargo": "AUXLIAR DE ENFERMERIA"},
+    ],
+    "Zurcidos": [
+        {"nombre": "BUENO YUNGA TRINIDAD NARSISA DE JESUS", "cedula": "0702595612", "cargo": "COSTURERA"},
+    ]
 }
 
 @app.route('/')
 def index():
-    # Convertimos el diccionario de empleados a un formato adecuado para enviar al frontend
-    empleados_list = [{"nombre": nombre, "cedula": datos["cedula"], "cargo": datos["cargo"]} for nombre, datos in empleados.items()]
-    return render_template('index.html', empleados=empleados_list)
+    return render_template('index.html')
+
+@app.route('/empleados', methods=['POST'])
+def obtener_empleados():
+    empresa = request.form.get("empresa")
+    if empresa in empleados:
+        return jsonify({"empleados": empleados[empresa]})
+    return jsonify({"empleados": []})
 
 @app.route('/generar_pdf', methods=['POST'])
 def generar_pdf():
     # Obtener los datos del formulario
-    nombre = request.form['empleado']
-    cedula = empleados[nombre]['cedula']  # Obtener cédula desde el diccionario de empleados
-    cargo = empleados[nombre]['cargo']  # Obtener cargo desde el diccionario de empleados
-    empresa = request.form['empresa']  # Obtener la empresa seleccionada
-    dias = request.form['dias']
-    tipo_solicitud = request.form['tipo_solicitud']
-    fecha_inicio = request.form['fecha_inicio']
-    fecha_fin = request.form['fecha_fin']
+    nombre = request.form.get('empleado')
+    empresa = request.form.get('empresa')
+    dias = request.form.get('dias')
+    tipo_solicitud = request.form.get('tipo_solicitud')
+    fecha_inicio = request.form.get('fecha_inicio')
+    fecha_fin = request.form.get('fecha_fin')
     fecha_actual = datetime.now().strftime('%d/%m/%Y')
 
+    # Validar que el empleado seleccionado está en la empresa correspondiente
+    empleado_info = None
+    for emp in empleados.get(empresa, []):
+        if emp["nombre"] == nombre:
+            empleado_info = emp
+            break
+
+    if not empleado_info:
+        return "Error: El empleado seleccionado no es válido.", 400
+
+    cedula = empleado_info["cedula"]
+    cargo = empleado_info["cargo"]
+    
     # Crear un buffer en memoria para el archivo PDF
     buffer = io.BytesIO()
 
@@ -48,27 +69,24 @@ def generar_pdf():
     # Posición inicial
     y_position = height - margin_y
 
-    # Colocar el logo en la esquina superior izquierda
-    logo_path = "static/images/logo.png"  # Ruta del logo
-    logo_width = 50  # Ancho del logo (ajustar según el tamaño deseado)
-    logo_height = 50  # Alto del logo (ajustar según el tamaño deseado)
-
-    # Dibuja el logo en la esquina superior izquierda
-    c.drawImage(logo_path, margin_x, height - logo_height - 10, width=logo_width, height=logo_height)
-
     # Título centrado
     c.setFont("Helvetica-Bold", 18)
     c.setFillColor(colors.darkblue)
     c.drawCentredString(width / 2, y_position, "Formulario de Solicitud de Vacaciones")
     y_position -= 40
 
+    # Añadir el nombre de la empresa debajo del título
+    c.setFont("Helvetica", 14)
+    c.setFillColor(colors.black)
+    c.drawCentredString(width / 2, y_position, f"Empresa: {empresa}")
+    y_position -= 30  # Espaciado después del nombre de la empresa
+
     # Fecha Actual
     c.setFont("Helvetica-Bold", 12)
     c.setFillColor(colors.black)
-    c.drawString(margin_x, y_position, "Fecha: ")  # Texto en negrita
-
+    c.drawString(margin_x, y_position, "Fecha: ")
     c.setFont("Helvetica", 12)
-    c.drawString(margin_x + 50, y_position, fecha_actual)  # Alinear la fecha con el texto anterior
+    c.drawString(margin_x + 50, y_position, fecha_actual)
     y_position -= 30
 
     # Texto principal justificado
@@ -76,24 +94,17 @@ def generar_pdf():
     text = f"Yo, {nombre}, con cédula: {cedula}, que desempeño el cargo de: {cargo}, solicito a usted me otorgue:"
     y_position = draw_paragraph(c, text, margin_x, y_position, max_width=width - 2 * margin_x)
 
-    # Espaciado antes del siguiente bloque
     y_position -= 30
 
-    # Tipo de solicitud en negrita
+    # Tipo de solicitud
     c.setFont("Helvetica-Bold", 12)
     c.drawString(margin_x, y_position, "Tipo de solicitud:")
-
-    # Ajustar posición para evitar cortes en el texto
-    y_position -= 20  # Espacio debajo del título
-
-    # Mostrar correctamente la selección del usuario
+    y_position -= 20
     c.setFont("Helvetica", 12)
     tipo_texto = "Vacaciones" if tipo_solicitud == "vacaciones" else "Anticipo de vacaciones"
-
-    # Usamos draw_paragraph() para asegurarnos de que se ajuste correctamente
     y_position = draw_paragraph(c, tipo_texto, margin_x, y_position, max_width=width - 2 * margin_x)
 
-    y_position -= 30  # Espaciado después del tipo de solicitud
+    y_position -= 30
 
     # Días tomados
     text = f"Solicito {dias} días a partir del {fecha_inicio} hasta el {fecha_fin}."
@@ -103,49 +114,41 @@ def generar_pdf():
 
     # Firmas
     c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(colors.black)
     c.drawCentredString(width / 2, y_position, "Firma del solicitante: ___________________________")
     y_position -= 50
 
-    y_position -= 60 
+    y_position -= 60
 
     c.setFont("Helvetica-Bold", 18)
-    c.setFillColor(colors.black)
     c.drawCentredString(width / 2, y_position, "Autorización")
     y_position -= 30
 
     c.setFont("Helvetica", 12)
-    c.setFillColor(colors.black)
     text = f"En calidad de jefe inmediato, autorizo {dias} días."
     y_position = draw_paragraph(c, text, margin_x, y_position, max_width=width - 2 * margin_x)
 
     y_position -= 50
 
     c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(colors.black)
     c.drawCentredString(width / 2, y_position, "Firma Jefe Departamento: ___________________________")
 
     y_position -= 60
 
-    # Notas al final del documento
-    y_position -= 50  # Espacio antes de las notas
+    # Notas
+    y_position -= 50
     c.setFont("Helvetica-Bold", 12)
-    c.setFillColor(colors.black)
     c.drawString(margin_x, y_position, "Notas:")
 
-    y_position -= 20  # Espacio antes de las notas
-
-    # Configurar fuente y color para el contenido de las notas
+    y_position -= 20
     c.setFont("Helvetica", 8)
     notas = [
         "1. No serán válidas las solicitudes que contengan tachones, enmendaduras o tinta correctora.",
         "2. La presente solicitud está sujeta a verificación, previo análisis del servidor/a responsable del proceso de vacaciones."
     ]
-
-    # Dibujar notas con draw_paragraph() para alineación correcta
     for nota in notas:
         y_position = draw_paragraph(c, nota, margin_x, y_position, max_width=width - 2 * margin_x)
-        y_position -= 10  # Espaciado entre notas
+        y_position -= 10
+
     # Finalizar el PDF
     c.showPage()
     c.save()
@@ -161,11 +164,11 @@ def draw_paragraph(c, text, x, y, max_width, font="Helvetica", font_size=12, lin
     Función para dibujar un párrafo justificado dentro de un ancho máximo.
     """
     c.setFont(font, font_size)
-    lines = wrap(text, width=80)  # Ajusta el ancho máximo de caracteres por línea
+    lines = wrap(text, width=80)
     for line in lines:
-        c.drawString(x, y, line)  # Dibuja cada línea alineada a la izquierda
-        y -= line_spacing  # Espaciado entre líneas
-    return y  # Retorna la nueva posición Y después de escribir el texto
+        c.drawString(x, y, line)
+        y -= line_spacing
+    return y
 
 if __name__ == '__main__':
     app.run(debug=True)
